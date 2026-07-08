@@ -13,9 +13,7 @@ jobs:
     - name: Extract ngrok
       run: Expand-Archive ngrok.zip
     - name: Authenticate ngrok
-      run: .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
-      env:
-        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+      run: .\ngrok\ngrok.exe authtoken 3GEnzUKhtJL1C1vfxyG4KR8pGQD_31DXeQau6E8BV4r7FaGuk
     - name: Enable Terminal Services
       run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
     - name: Enable Remote Desktop Firewall Rule
