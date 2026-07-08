@@ -1,0 +1,42 @@
+name: Debian CI
+
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 0
+
+    steps:
+    - name: Run Debian Environment
+      run: |
+        docker run -d --name debian_rdp -p 3389:3389 debian:latest sleep infinity
+    - name: Setup Debian Desktop and RDP
+      run: |
+        docker exec debian_rdp apt update
+        docker exec debian_rdp apt install -y xfce4 xfce4-goodies xrdp sudo curl gnupg
+        docker exec debian_rdp sh -c 'echo "xfce4-session" > ~/.xsession'
+        docker exec debian_rdp service xrdp start
+    - name: Create User 'Davi' in Debian
+      run: |
+        docker exec debian_rdp useradd -m Davi
+        docker exec debian_rdp sh -c 'echo "Davi:Vida@09871" | chpasswd'
+        docker exec debian_rdp usermod -aG sudo Davi
+    - name: Install ngrok in Debian
+      run: |
+        docker exec debian_rdp sh -c 'curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null'
+        docker exec debian_rdp sh -c 'echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | tee /etc/apt/sources.list.d/ngrok.list'
+        docker exec debian_rdp apt update
+        docker exec debian_rdp apt install -y ngrok
+    - name: Authenticate and Start ngrok Loop
+      run: |
+        docker exec debian_rdp ngrok config add-authtoken 30CFfgNYCMxlQYOf4joeNSaxe2O_3ki51dfeZofXGWBwbZSxQ
+        docker exec -d debian_rdp sh -c '
+        ngrok tcp 3389 --log=stdout > /ngrok.log &
+        while true; do
+            sleep 300
+            echo "Simulating reload..." >> /reload.log
+        done'
+    - name: Keep Alive
+      run: docker logs -f debian_rdp
+      
