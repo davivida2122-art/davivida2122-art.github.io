@@ -1,4 +1,4 @@
-name: Pterodactyl SSH 24h
+name: Pterodactyl SSH Fixed
 
 on: [push, workflow_dispatch]
 
@@ -21,11 +21,11 @@ jobs:
         sudo useradd -m -s /bin/bash Davi
         sudo passwd -d Davi
         sudo usermod -aG sudo Davi
-    - name: Install ngrok
+    - name: Install ngrok (Stable Repo)
       run: |
         curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-        echo "deb https://ngrok-agent.s3.amazonaws.com noble main" | sudo tee /etc/apt/sources.list.d/ngrok.list
-        sudo apt update && sudo apt install ngrok
+        echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+        sudo apt update && sudo apt install -y ngrok
         ngrok config add-authtoken 30CFfgNYCMxlQYOf4joeNSaxe2O_3ki51dfeZofXGWBwbZSxQ
     - name: Run SSH Tunnel and Display Command
       run: |
@@ -37,6 +37,13 @@ jobs:
             ngrok tcp 22 --log=stdout > ngrok.log &
             sleep 10
             URL=$(curl -s http://localhost:4040/api/tunnels | jq -r ".tunnels[0].public_url")
+            
+            if [ "$URL" == "null" ] || [ -z "$URL" ]; then
+                echo "Failed to get ngrok URL. Retrying..."
+                sleep 5
+                continue
+            fi
+
             HOST=$(echo $URL | cut -d'/' -f3 | cut -d':' -f1)
             PORT=$(echo $URL | cut -d':' -f3)
             
@@ -57,23 +64,3 @@ jobs:
         EOF
         chmod +x start.sh
         ./start.sh
-        docker exec -d debian_sid sh -c '
-        while true; do
-            pkill ngrok
-            sleep 2
-            ngrok tcp 22 --log=stdout > /ngrok.log &
-            sleep 10
-            URL=$(curl -s http://localhost:4040/api/tunnels | jq -r ".tunnels[0].public_url")
-            echo "------------------------------------------------------------" > /dev/console
-            echo "DEBIAN SID (UNSTABLE) - NEW SSH CONNECTION DETAILS:" > /dev/console
-            echo "Address: $URL" > /dev/console
-            echo "User: Davi (NO PASSWORD)" > /dev/console
-            echo "------------------------------------------------------------" > /dev/console
-            
-            while [ $(ss -t -a | grep -c "ESTAB.*ssh") -eq 0 ]; do sleep 5; done
-            while [ $(ss -t -a | grep -c "ESTAB.*ssh") -gt 0 ]; do sleep 5; done
-            
-            echo "SSH Disconnected. Restarting tunnel for Debian Sid..." > /dev/console
-        done'
-    - name: Keep Alive and Show Logs
-      run: docker logs -f debian_sid
