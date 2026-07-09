@@ -1,4 +1,4 @@
-name: Debian 12 Localtonet Updated
+name: Debian 12 Localtonet Direct SSH
 
 on: [push, workflow_dispatch]
 
@@ -31,16 +31,24 @@ jobs:
         docker exec debian_local wget https://localtonet.com/download/localtonet-linux-x64.zip
         docker exec debian_local unzip localtonet-linux-x64.zip
         docker exec debian_local chmod +x localtonet
-        # Start Localtonet with the NEW AuthToken
         docker exec -d debian_local sh -c './localtonet authtoken VLHzeFcvslYn7WAgORG935JEmbdXBPkZy'
         sleep 5
-        docker exec -d debian_local sh -c './localtonet tcp 22'
-    - name: Display Info and Keep Alive
+        docker exec -d debian_local sh -c './localtonet tcp 22 > /localtonet.log 2>&1'
+    - name: Extract and Display SSH Command
       run: |
+        echo "Aguardando Localtonet iniciar e gerar o link..."
+        sleep 15
+        # Localtonet logs are different from ngrok, we attempt to find the address in the log file
+        # Or we provide instructions if the extraction is complex in the container
         echo "===================================================="
-        echo "   DEBIAN 12 - LOCALTONET SSH (NEW TOKEN)"
+        echo "   DEBIAN 12 - LOCALTONET SSH ACCESS"
         echo "===================================================="
         echo "User: Davi (NO PASSWORD)"
-        echo "IP Forwarding: Enabled"
         echo "===================================================="
-        docker logs -f debian_local
+        echo "Consulte o endereço no seu painel: https://localtonet.com/dashboard"
+        echo "O comando será parecido com:"
+        echo "ssh Davi@localtonet.com -p <PORTA_DO_PAINEL>"
+        echo "===================================================="
+    - name: Keep Alive
+      run: docker logs -f debian_local
+      
