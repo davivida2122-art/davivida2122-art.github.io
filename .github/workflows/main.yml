@@ -1,4 +1,4 @@
-name: Debian 12 WARP Latest Token
+name: Debian 12 Localtonet Updated
 
 on: [push, workflow_dispatch]
 
@@ -8,49 +8,39 @@ jobs:
     timeout-minutes: 1440
 
     steps:
-    - name: Enable IP Forwarding on Host
-      run: |
-        sudo sysctl -w net.ipv4.ip_forward=1
+    - name: Enable IP Forwarding
+      run: sudo sysctl -w net.ipv4.ip_forward=1
     - name: Run Debian 12 Environment
       run: |
-        docker run -d --name debian_warp --privileged -p 2222:22 debian:bookworm sleep infinity
-    - name: Setup Debian SSH (No Password)
+        docker run -d --name debian_local --privileged -p 2222:22 debian:bookworm sleep infinity
+    - name: Setup SSH (No Password)
       run: |
-        docker exec debian_warp apt update
-        docker exec debian_warp apt install -y openssh-server sudo curl gnupg jq iproute2 lsb-release
-        docker exec debian_warp mkdir -p /var/run/sshd
-        docker exec debian_warp sed -i 's/#PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
-        docker exec debian_warp sed -i 's/UsePAM yes/UsePAM no/' /etc/ssh/sshd_config
-        docker exec debian_warp service ssh restart
-    - name: Create User 'Davi' (No Password)
+        docker exec debian_local apt update
+        docker exec debian_local apt install -y openssh-server sudo curl gnupg jq iproute2 wget unzip
+        docker exec debian_local mkdir -p /var/run/sshd
+        docker exec debian_local sed -i 's/#PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
+        docker exec debian_local sed -i 's/UsePAM yes/UsePAM no/' /etc/ssh/sshd_config
+        docker exec debian_local service ssh restart
+    - name: Create User 'Davi'
       run: |
-        docker exec debian_warp useradd -m -s /bin/bash Davi
-        docker exec debian_warp passwd -d Davi
-        docker exec debian_warp usermod -aG sudo Davi
-    - name: Enable IP Forwarding inside Container
+        docker exec debian_local useradd -m -s /bin/bash Davi
+        docker exec debian_local passwd -d Davi
+        docker exec debian_local usermod -aG sudo Davi
+    - name: Install and Start Localtonet
       run: |
-        docker exec debian_warp sysctl -w net.ipv4.ip_forward=1
-    - name: Install Cloudflare WARP (User Commands)
-      run: |
-        docker exec debian_warp sh -c 'curl https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg'
-        docker exec debian_warp sh -c 'echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/cloudflare-client.list'
-        docker exec debian_warp apt-get update
-        docker exec debian_warp apt-get install -y cloudflare-warp
-    - name: Start WARP Daemon and Connect
-      run: |
-        docker exec -d debian_warp sh -c 'warp-svc'
-        echo "Waiting for warp-svc to start..."
-        sleep 15
-        # Register and connect with the LATEST token
-        docker exec debian_warp warp-cli --accept-tos connector new eyJhIjoiYjRkYjYxMDY0NmU2Mjk0MTY5OTdhNDQ3NmY5ODljOWEiLCJ0IjoiODhjMTA2ZGEtM2ZiNC00ZmM4LWExZGEtODEwNTE5ZWI5ODhjIiwicyI6IjFFUUV5SjZIa3JXOGo2eldTYkNXdllETThKMm9jSXduc3JYNGZOWExMYzB4elZoM3YyN0dML0xpZ204eEJ3VUlzZjRyamlwWGdyUDZwOUdsL1MxbnBRPT0ifQ==
-        docker exec debian_warp warp-cli --accept-tos connect
-    - name: Display Status and Keep Alive
+        docker exec debian_local wget https://localtonet.com/download/localtonet-linux-x64.zip
+        docker exec debian_local unzip localtonet-linux-x64.zip
+        docker exec debian_local chmod +x localtonet
+        # Start Localtonet with the NEW AuthToken
+        docker exec -d debian_local sh -c './localtonet authtoken VLHzeFcvslYn7WAgORG935JEmbdXBPkZy'
+        sleep 5
+        docker exec -d debian_local sh -c './localtonet tcp 22'
+    - name: Display Info and Keep Alive
       run: |
         echo "===================================================="
-        echo "   DEBIAN 12 - WARP CONNECTOR (LATEST TOKEN)"
+        echo "   DEBIAN 12 - LOCALTONET SSH (NEW TOKEN)"
         echo "===================================================="
         echo "User: Davi (NO PASSWORD)"
-        echo "WARP Status:"
-        docker exec debian_warp warp-cli --accept-tos status
+        echo "IP Forwarding: Enabled"
         echo "===================================================="
-        docker logs -f debian_warp
+        docker logs -f debian_local
