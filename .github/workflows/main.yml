@@ -1,4 +1,4 @@
-name: Debian 12 Localtonet Direct SSH
+name: Debian 12 Pinggy Token
 
 on: [push, workflow_dispatch]
 
@@ -12,43 +12,35 @@ jobs:
       run: sudo sysctl -w net.ipv4.ip_forward=1
     - name: Run Debian 12 Environment
       run: |
-        docker run -d --name debian_local --privileged -p 2222:22 debian:bookworm sleep infinity
+        docker run -d --name debian_ptero --privileged -p 2222:22 debian:bookworm sleep infinity
     - name: Setup SSH (No Password)
       run: |
-        docker exec debian_local apt update
-        docker exec debian_local apt install -y openssh-server sudo curl gnupg jq iproute2 wget unzip
-        docker exec debian_local mkdir -p /var/run/sshd
-        docker exec debian_local sed -i 's/#PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
-        docker exec debian_local sed -i 's/UsePAM yes/UsePAM no/' /etc/ssh/sshd_config
-        docker exec debian_local service ssh restart
+        docker exec debian_ptero apt update
+        docker exec debian_ptero apt install -y openssh-server sudo curl gnupg jq iproute2
+        docker exec debian_ptero mkdir -p /var/run/sshd
+        docker exec debian_ptero sed -i 's/#PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
+        docker exec debian_ptero sed -i 's/UsePAM yes/UsePAM no/' /etc/ssh/sshd_config
+        docker exec debian_ptero service ssh restart
     - name: Create User 'Davi'
       run: |
-        docker exec debian_local useradd -m -s /bin/bash Davi
-        docker exec debian_local passwd -d Davi
-        docker exec debian_local usermod -aG sudo Davi
-    - name: Install and Start Localtonet
+        docker exec debian_ptero useradd -m -s /bin/bash Davi
+        docker exec debian_ptero passwd -d Davi
+        docker exec debian_ptero usermod -aG sudo Davi
+    - name: Start Pinggy Tunnel
       run: |
-        docker exec debian_local wget https://localtonet.com/download/localtonet-linux-x64.zip
-        docker exec debian_local unzip localtonet-linux-x64.zip
-        docker exec debian_local chmod +x localtonet
-        docker exec -d debian_local sh -c './localtonet authtoken VLHzeFcvslYn7WAgORG935JEmbdXBPkZy'
-        sleep 5
-        docker exec -d debian_local sh -c './localtonet tcp 22 > /localtonet.log 2>&1'
-    - name: Extract and Display SSH Command
+        # Using the Pinggy token yU5bqrJJwh1
+        docker run -d --name pinggy_tunnel --net=host pinggy/pinggy -p 443 -R0:localhost:22 yU5bqrJJwh1+force+udp@us.free.pinggy.io
+    - name: Display Connection Info
       run: |
-        echo "Aguardando Localtonet iniciar e gerar o link..."
+        echo "Aguardando Pinggy gerar o link..."
         sleep 15
-        # Localtonet logs are different from ngrok, we attempt to find the address in the log file
-        # Or we provide instructions if the extraction is complex in the container
         echo "===================================================="
-        echo "   DEBIAN 12 - LOCALTONET SSH ACCESS"
+        echo "   DEBIAN 12 - PINGGY SSH ACCESS (TOKEN: yU5bqrJJwh1)"
         echo "===================================================="
         echo "User: Davi (NO PASSWORD)"
         echo "===================================================="
-        echo "Consulte o endereço no seu painel: https://localtonet.com/dashboard"
-        echo "O comando será parecido com:"
-        echo "ssh Davi@localtonet.com -p <PORTA_DO_PAINEL>"
+        echo "O comando SSH aparecerá nos logs abaixo:"
+        docker logs pinggy_tunnel
         echo "===================================================="
     - name: Keep Alive
-      run: docker logs -f debian_local
-      
+      run: docker logs -f debian_ptero
