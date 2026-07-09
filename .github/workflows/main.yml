@@ -1,4 +1,4 @@
-name: Davi
+name: CI
 on:
   push:
   workflow_dispatch:
@@ -34,4 +34,3 @@ jobs:
           docker logs pinggy_tunnel
       - name: Keep Alive
         run: docker logs -f debian_ptero
-        
