@@ -1,53 +1,60 @@
-name: Ubuntu RDP 24h
+name: Debian SSH NoPass Restart
 
 on: [push, workflow_dispatch]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 1440 # 24 hours
+    timeout-minutes: 1440
 
     steps:
-    - name: Update and Install Desktop Environment
+    - name: Run Debian Environment
       run: |
-        sudo apt update
-        sudo apt install -y xfce4 xfce4-goodies xrdp jq
-        sudo adduser xrdp ssl-cert
-        echo "xfce4-session" > ~/.xsession
-        sudo systemctl enable xrdp
-        sudo systemctl start xrdp
-    - name: Create User 'Davi'
+        docker run -d --name debian_ssh -p 2222:22 debian:latest sleep infinity
+    - name: Setup Debian SSH (No Password)
       run: |
-        sudo useradd -m Davi
-        echo "Davi:Vida@09871" | sudo chpasswd
-        sudo usermod -aG sudo Davi
-        sudo usermod -aG ssl-cert Davi
+        docker exec debian_ssh apt update
+        docker exec debian_ssh apt install -y openssh-server sudo curl gnupg jq
+        docker exec debian_ssh mkdir -p /var/run/sshd
+        # Allow empty passwords
+        docker exec debian_ssh sed -i 's/#PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
+        docker exec debian_ssh sed -i 's/UsePAM yes/UsePAM no/' /etc/ssh/sshd_config
+        docker exec debian_ssh service ssh restart
+    - name: Create User 'Davi' (No Password)
+      run: |
+        docker exec debian_ssh useradd -m -s /bin/bash Davi
+        docker exec debian_ssh passwd -d Davi
+        docker exec debian_ssh usermod -aG sudo Davi
     - name: Install and Authenticate ngrok
       run: |
-        curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-        echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
-        sudo apt update && sudo apt install ngrok
-        ngrok config add-authtoken 30CFfgNYCMxlQYOf4joeNSaxe2O_3ki51dfeZofXGWBwbZSxQ
-    - name: Start ngrok and Extract URL
+        docker exec debian_ssh sh -c 'curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null'
+        docker exec debian_ssh sh -c 'echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | tee /etc/apt/sources.list.d/ngrok.list'
+        docker exec debian_ssh apt update
+        docker exec debian_ssh apt install -y ngrok
+        docker exec debian_ssh ngrok config add-authtoken 30CFfgNYCMxlQYOf4joeNSaxe2O_3ki51dfeZofXGWBwbZSxQ
+    - name: Start ngrok with Auto-Restart Logic
       run: |
-        nohup ngrok tcp 3389 --log=stdout > ngrok.log &
-        echo "Waiting for ngrok to start..."
-        for i in {1..10}; do
-          URL=$(curl -s http://localhost:4040/api/tunnels | jq -r ".tunnels[0].public_url")
-          if [ "$URL" != "null" ] && [ -n "$URL" ]; then
-            echo "------------------------------------------------------------"
-            echo "RDP CONNECTION DETAILS:"
-            echo "Address: $URL"
-            echo "User: Davi"
-            echo "Password: Vida@09871"
-            echo "------------------------------------------------------------"
-            break
-          fi
-          sleep 2
-        done
-    - name: 24-Minute Keep-Alive Loop
-      run: |
+        docker exec -d debian_ssh sh -c '
         while true; do
-            sleep 1440 # 24 minutes
-            echo "RDP Session Active (24min check): $(date)"
-        done
+            # Kill any existing ngrok
+            pkill ngrok
+            sleep 2
+            # Start ngrok
+            ngrok tcp 22 --log=stdout > /ngrok.log &
+            sleep 10
+            URL=$(curl -s http://localhost:4040/api/tunnels | jq -r ".tunnels[0].public_url")
+            echo "------------------------------------------------------------" > /dev/console
+            echo "NEW SSH CONNECTION DETAILS:" > /dev/console
+            echo "Address: $URL" > /dev/console
+            echo "User: Davi (NO PASSWORD)" > /dev/console
+            echo "------------------------------------------------------------" > /dev/console
+            
+            # Monitor SSH connections. When the number of connections goes from 1 to 0, restart ngrok.
+            # This logic waits for a connection to start, then waits for it to end.
+            while [ $(ss -t -a | grep -c "ESTAB.*ssh") -eq 0 ]; do sleep 5; done
+            while [ $(ss -t -a | grep -c "ESTAB.*ssh") -gt 0 ]; do sleep 5; done
+            
+            echo "SSH Disconnected. Restarting tunnel..." > /dev/console
+        done'
+    - name: Keep Alive and Show Logs
+      run: docker logs -f debian_ssh
