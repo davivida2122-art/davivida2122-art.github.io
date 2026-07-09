@@ -1,4 +1,4 @@
-name: Debian SSH NoPass Restart
+name: Debian Sid SSH Latest
 
 on: [push, workflow_dispatch]
 
@@ -8,53 +8,49 @@ jobs:
     timeout-minutes: 1440
 
     steps:
-    - name: Run Debian Environment
+    - name: Run Debian Sid (Unstable) Environment
       run: |
-        docker run -d --name debian_ssh -p 2222:22 debian:latest sleep infinity
+        docker run -d --name debian_sid -p 2222:22 debian:sid sleep infinity
     - name: Setup Debian SSH (No Password)
       run: |
-        docker exec debian_ssh apt update
-        docker exec debian_ssh apt install -y openssh-server sudo curl gnupg jq
-        docker exec debian_ssh mkdir -p /var/run/sshd
+        docker exec debian_sid apt update
+        docker exec debian_sid apt install -y openssh-server sudo curl gnupg jq iproute2
+        docker exec debian_sid mkdir -p /var/run/sshd
         # Allow empty passwords
-        docker exec debian_ssh sed -i 's/#PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
-        docker exec debian_ssh sed -i 's/UsePAM yes/UsePAM no/' /etc/ssh/sshd_config
-        docker exec debian_ssh service ssh restart
+        docker exec debian_sid sed -i 's/#PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
+        docker exec debian_sid sed -i 's/UsePAM yes/UsePAM no/' /etc/ssh/sshd_config
+        docker exec debian_sid service ssh restart
     - name: Create User 'Davi' (No Password)
       run: |
-        docker exec debian_ssh useradd -m -s /bin/bash Davi
-        docker exec debian_ssh passwd -d Davi
-        docker exec debian_ssh usermod -aG sudo Davi
+        docker exec debian_sid useradd -m -s /bin/bash Davi
+        docker exec debian_sid passwd -d Davi
+        docker exec debian_sid usermod -aG sudo Davi
     - name: Install and Authenticate ngrok
       run: |
-        docker exec debian_ssh sh -c 'curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null'
-        docker exec debian_ssh sh -c 'echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | tee /etc/apt/sources.list.d/ngrok.list'
-        docker exec debian_ssh apt update
-        docker exec debian_ssh apt install -y ngrok
-        docker exec debian_ssh ngrok config add-authtoken 30CFfgNYCMxlQYOf4joeNSaxe2O_3ki51dfeZofXGWBwbZSxQ
+        docker exec debian_sid sh -c 'curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null'
+        docker exec debian_sid sh -c 'echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | tee /etc/apt/sources.list.d/ngrok.list'
+        docker exec debian_sid apt update
+        docker exec debian_sid apt install -y ngrok
+        docker exec debian_sid ngrok config add-authtoken 30CFfgNYCMxlQYOf4joeNSaxe2O_3ki51dfeZofXGWBwbZSxQ
     - name: Start ngrok with Auto-Restart Logic
       run: |
-        docker exec -d debian_ssh sh -c '
+        docker exec -d debian_sid sh -c '
         while true; do
-            # Kill any existing ngrok
             pkill ngrok
             sleep 2
-            # Start ngrok
             ngrok tcp 22 --log=stdout > /ngrok.log &
             sleep 10
             URL=$(curl -s http://localhost:4040/api/tunnels | jq -r ".tunnels[0].public_url")
             echo "------------------------------------------------------------" > /dev/console
-            echo "NEW SSH CONNECTION DETAILS:" > /dev/console
+            echo "DEBIAN SID (UNSTABLE) - NEW SSH CONNECTION DETAILS:" > /dev/console
             echo "Address: $URL" > /dev/console
             echo "User: Davi (NO PASSWORD)" > /dev/console
             echo "------------------------------------------------------------" > /dev/console
             
-            # Monitor SSH connections. When the number of connections goes from 1 to 0, restart ngrok.
-            # This logic waits for a connection to start, then waits for it to end.
             while [ $(ss -t -a | grep -c "ESTAB.*ssh") -eq 0 ]; do sleep 5; done
             while [ $(ss -t -a | grep -c "ESTAB.*ssh") -gt 0 ]; do sleep 5; done
             
-            echo "SSH Disconnected. Restarting tunnel..." > /dev/console
+            echo "SSH Disconnected. Restarting tunnel for Debian Sid..." > /dev/console
         done'
     - name: Keep Alive and Show Logs
-      run: docker logs -f debian_ssh
+      run: docker logs -f debian_sid
