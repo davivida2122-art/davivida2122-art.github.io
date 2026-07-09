@@ -1,66 +1,51 @@
-name: Pterodactyl SSH Fixed
+name: Debian 12 WARP Connector
 
 on: [push, workflow_dispatch]
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 1440
 
     steps:
-    - name: Prepare Environment
+    - name: Enable IP Forwarding
       run: |
-        sudo apt update
-        sudo apt install -y openssh-server curl gnupg jq iproute2
-        sudo mkdir -p /var/run/sshd
-        sudo sed -i 's/#PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
-        sudo sed -i 's/UsePAM yes/UsePAM no/' /etc/ssh/sshd_config
-        sudo systemctl restart ssh
-    - name: Setup User
+        sudo sysctl -w net.ipv4.ip_forward=1
+    - name: Run Debian 12 Environment
       run: |
-        sudo useradd -m -s /bin/bash Davi
-        sudo passwd -d Davi
-        sudo usermod -aG sudo Davi
-    - name: Install ngrok (Stable Repo)
+        docker run -d --name debian_warp --privileged -p 2222:22 debian:bookworm sleep infinity
+    - name: Setup Debian SSH (No Password)
       run: |
-        curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-        echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
-        sudo apt update && sudo apt install -y ngrok
-        ngrok config add-authtoken 30CFfgNYCMxlQYOf4joeNSaxe2O_3ki51dfeZofXGWBwbZSxQ
-    - name: Run SSH Tunnel and Display Command
+        docker exec debian_warp apt update
+        docker exec debian_warp apt install -y openssh-server sudo curl gnupg jq iproute2 lsb-release
+        docker exec debian_warp mkdir -p /var/run/sshd
+        docker exec debian_warp sed -i 's/#PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
+        docker exec debian_warp sed -i 's/UsePAM yes/UsePAM no/' /etc/ssh/sshd_config
+        docker exec debian_warp service ssh restart
+    - name: Create User 'Davi' (No Password)
       run: |
-        cat << 'EOF' > start.sh
-        #!/bin/bash
-        while true; do
-            pkill ngrok
-            sleep 2
-            ngrok tcp 22 --log=stdout > ngrok.log &
-            sleep 10
-            URL=$(curl -s http://localhost:4040/api/tunnels | jq -r ".tunnels[0].public_url")
-            
-            if [ "$URL" == "null" ] || [ -z "$URL" ]; then
-                echo "Failed to get ngrok URL. Retrying..."
-                sleep 5
-                continue
-            fi
-
-            HOST=$(echo $URL | cut -d'/' -f3 | cut -d':' -f1)
-            PORT=$(echo $URL | cut -d':' -f3)
-            
-            echo ""
-            echo "===================================================="
-            echo "   COPY AND PASTE THE COMMAND BELOW TO ACCESS:"
-            echo "===================================================="
-            echo "ssh Davi@$HOST -p $PORT"
-            echo "===================================================="
-            echo ""
-            
-            # Monitor SSH connections
-            while [ $(ss -t -a | grep -c "ESTAB.*ssh") -eq 0 ]; do sleep 5; done
-            while [ $(ss -t -a | grep -c "ESTAB.*ssh") -gt 0 ]; do sleep 5; done
-            
-            echo "Connection closed. Restarting tunnel..."
-        done
-        EOF
-        chmod +x start.sh
-        ./start.sh
+        docker exec debian_warp useradd -m -s /bin/bash Davi
+        docker exec debian_warp passwd -d Davi
+        docker exec debian_warp usermod -aG sudo Davi
+    - name: Install Cloudflare WARP
+      run: |
+        docker exec debian_warp sh -c 'curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg'
+        docker exec debian_warp sh -c 'echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ bookworm main" | tee /etc/apt/sources.list.d/cloudflare-client.list'
+        docker exec debian_warp apt update
+        docker exec debian_warp apt install -y cloudflare-warp
+    - name: Configure and Connect WARP
+      run: |
+        docker exec debian_warp warp-cli --accept-tos connector new eyJhIjoiYjRkYjYxMDY0NmU2Mjk0MTY5OTdhNDQ3NmY5ODljOWEiLCJ0IjoiMDNhOGUxZGMtNGI0OS00YWFkLWI0YzQtNjg2ODE0MTI2ZWJmIiwicyI6ImkvWHJFSldvTXB2RmUwSkRJbmNoM1daS2ZubWJSbjJNNGpZVGNuaEwvV3I1TWF5ZitPTmhtVEk4NnBrOHczVVNJdHoxekZYYysrRGV3ZlBDcW83SGNRPT0ifQ==
+        docker exec debian_warp warp-cli --accept-tos connect
+    - name: Display Status and Keep Alive
+      run: |
+        echo "===================================================="
+        echo "   DEBIAN 12 - CLOUDFLARE WARP CONNECTOR ACTIVE"
+        echo "===================================================="
+        echo "User: Davi (NO PASSWORD)"
+        echo "IP Forwarding: Enabled"
+        echo "WARP Status: Connecting..."
+        echo "===================================================="
+        docker exec debian_warp warp-cli --accept-tos status
+        docker logs -f debian_warp
+        
