@@ -1,4 +1,4 @@
-name: Debian SSH Auto-Tunnel
+name: Debian SSH Fixed
 
 on: [push, workflow_dispatch]
 
@@ -15,7 +15,7 @@ jobs:
       run: |
         docker exec debian_ssh apt update
         docker exec debian_ssh apt install -y openssh-server sudo curl gnupg jq
-        docker exec debian_ssh mkdir /var/run/sshd
+        docker exec debian_ssh mkdir -p /var/run/sshd
         docker exec debian_ssh service ssh start
     - name: Create User 'Davi'
       run: |
@@ -33,13 +33,19 @@ jobs:
       run: |
         docker exec -d debian_ssh sh -c 'ngrok tcp 22 --log=stdout > /ngrok.log &'
         echo "Waiting for ngrok to start..."
-        sleep 10
-        echo "------------------------------------------------------------"
-        echo "SSH CONNECTION DETAILS:"
-        docker exec debian_ssh sh -c 'curl -s http://localhost:4040/api/tunnels | jq -r ".tunnels[0].public_url"'
-        echo "User: Davi"
-        echo "Password: Vida@09871"
-        echo "------------------------------------------------------------"
+        for i in {1..10}; do
+          URL=$(docker exec debian_ssh sh -c 'curl -s http://localhost:4040/api/tunnels | jq -r ".tunnels[0].public_url"')
+          if [ "$URL" != "null" ] && [ -n "$URL" ]; then
+            echo "------------------------------------------------------------"
+            echo "SSH CONNECTION DETAILS:"
+            echo "Address: $URL"
+            echo "User: Davi"
+            echo "Password: Vida@09871"
+            echo "------------------------------------------------------------"
+            break
+          fi
+          sleep 2
+        done
     - name: 5-Minute Keep-Alive Loop
       run: |
         docker exec -d debian_ssh sh -c '
@@ -48,4 +54,3 @@ jobs:
             echo "SSH Session Active: $(date)" >> /reload.log
         done'
         docker logs -f debian_ssh
-        
