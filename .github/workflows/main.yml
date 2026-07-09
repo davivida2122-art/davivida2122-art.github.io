@@ -1,4 +1,4 @@
-name: Debian 12 WARP Connector
+name: Debian 12 WARP Fixed
 
 on: [push, workflow_dispatch]
 
@@ -33,8 +33,13 @@ jobs:
         docker exec debian_warp sh -c 'echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ bookworm main" | tee /etc/apt/sources.list.d/cloudflare-client.list'
         docker exec debian_warp apt update
         docker exec debian_warp apt install -y cloudflare-warp
-    - name: Configure and Connect WARP
+    - name: Start WARP Daemon and Connect
       run: |
+        # Start the daemon in the background
+        docker exec -d debian_warp sh -c 'warp-svc'
+        echo "Waiting for warp-svc to start..."
+        sleep 10
+        # Register and connect
         docker exec debian_warp warp-cli --accept-tos connector new eyJhIjoiYjRkYjYxMDY0NmU2Mjk0MTY5OTdhNDQ3NmY5ODljOWEiLCJ0IjoiMDNhOGUxZGMtNGI0OS00YWFkLWI0YzQtNjg2ODE0MTI2ZWJmIiwicyI6ImkvWHJFSldvTXB2RmUwSkRJbmNoM1daS2ZubWJSbjJNNGpZVGNuaEwvV3I1TWF5ZitPTmhtVEk4NnBrOHczVVNJdHoxekZYYysrRGV3ZlBDcW83SGNRPT0ifQ==
         docker exec debian_warp warp-cli --accept-tos connect
     - name: Display Status and Keep Alive
@@ -43,9 +48,7 @@ jobs:
         echo "   DEBIAN 12 - CLOUDFLARE WARP CONNECTOR ACTIVE"
         echo "===================================================="
         echo "User: Davi (NO PASSWORD)"
-        echo "IP Forwarding: Enabled"
-        echo "WARP Status: Connecting..."
-        echo "===================================================="
+        echo "WARP Status:"
         docker exec debian_warp warp-cli --accept-tos status
+        echo "===================================================="
         docker logs -f debian_warp
-        
