@@ -1,4 +1,4 @@
-name: Debian 12 Pinggy Final SSH
+name: Debian 12 Pinggy Fixed
 
 on: [push, workflow_dispatch]
 
@@ -10,9 +10,11 @@ jobs:
     steps:
     - name: Enable IP Forwarding
       run: sudo sysctl -w net.ipv4.ip_forward=1
+
     - name: Run Debian 12 Environment
       run: |
         docker run -d --name debian_ptero --privileged -p 2222:22 debian:bookworm sleep infinity
+
     - name: Setup SSH (No Password)
       run: |
         docker exec debian_ptero apt update
@@ -21,38 +23,32 @@ jobs:
         docker exec debian_ptero sed -i 's/#PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
         docker exec debian_ptero sed -i 's/UsePAM yes/UsePAM no/' /etc/ssh/sshd_config
         docker exec debian_ptero service ssh restart
+
     - name: Create User 'Davi'
       run: |
         docker exec debian_ptero useradd -m -s /bin/bash Davi
         docker exec debian_ptero passwd -d Davi
         docker exec debian_ptero usermod -aG sudo Davi
+
     - name: Start Pinggy Tunnel
       run: |
         docker run -d --name pinggy_tunnel --net=host pinggy/pinggy -p 443 -R0:localhost:22 yU5bqrJJwh1+force+udp@us.free.pinggy.io
+
     - name: Display Connection Command
       run: |
-        echo ""
+        echo " "
         echo "===================================================="
         echo "   DEBIAN 12 - PINGGY SSH CONNECTION READY"
         echo "===================================================="
         echo "COPIE E COLE O COMANDO ABAIXO NO SEU TERMINAL:"
-        echo ""
+        echo " "
         echo "ssh Davi@evqqh-13-87-231-100.run.pinggy-free.link -p 29272"
-        echo ""
+        echo " "
         echo "===================================================="
         echo "User: Davi (NO PASSWORD)"
         echo "===================================================="
         sleep 5
         docker logs pinggy_tunnel
-    - name: Keep Alive
-      run: docker logs -f debian_ptero
-        echo "===================================================="
-        echo "   DEBIAN 12 - PINGGY SSH ACCESS (TOKEN: yU5bqrJJwh1)"
-        echo "===================================================="
-        echo "User: Davi (NO PASSWORD)"
-        echo "===================================================="
-        echo "O comando SSH aparecerá nos logs abaixo:"
-        docker logs pinggy_tunnel
-        echo "===================================================="
+
     - name: Keep Alive
       run: docker logs -f debian_ptero
