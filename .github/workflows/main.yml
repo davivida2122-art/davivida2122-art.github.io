@@ -1,39 +1,62 @@
-name: Debian Sid SSH Latest
+name: Pterodactyl SSH 24h
 
 on: [push, workflow_dispatch]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 1440
 
     steps:
-    - name: Run Debian Sid (Unstable) Environment
+    - name: Prepare Environment
       run: |
-        docker run -d --name debian_sid -p 2222:22 debian:sid sleep infinity
-    - name: Setup Debian SSH (No Password)
+        sudo apt update
+        sudo apt install -y openssh-server curl gnupg jq iproute2
+        sudo mkdir -p /var/run/sshd
+        sudo sed -i 's/#PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
+        sudo sed -i 's/UsePAM yes/UsePAM no/' /etc/ssh/sshd_config
+        sudo systemctl restart ssh
+    - name: Setup User
       run: |
-        docker exec debian_sid apt update
-        docker exec debian_sid apt install -y openssh-server sudo curl gnupg jq iproute2
-        docker exec debian_sid mkdir -p /var/run/sshd
-        # Allow empty passwords
-        docker exec debian_sid sed -i 's/#PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
-        docker exec debian_sid sed -i 's/UsePAM yes/UsePAM no/' /etc/ssh/sshd_config
-        docker exec debian_sid service ssh restart
-    - name: Create User 'Davi' (No Password)
+        sudo useradd -m -s /bin/bash Davi
+        sudo passwd -d Davi
+        sudo usermod -aG sudo Davi
+    - name: Install ngrok
       run: |
-        docker exec debian_sid useradd -m -s /bin/bash Davi
-        docker exec debian_sid passwd -d Davi
-        docker exec debian_sid usermod -aG sudo Davi
-    - name: Install and Authenticate ngrok
+        curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+        echo "deb https://ngrok-agent.s3.amazonaws.com noble main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+        sudo apt update && sudo apt install ngrok
+        ngrok config add-authtoken 30CFfgNYCMxlQYOf4joeNSaxe2O_3ki51dfeZofXGWBwbZSxQ
+    - name: Run SSH Tunnel and Display Command
       run: |
-        docker exec debian_sid sh -c 'curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null'
-        docker exec debian_sid sh -c 'echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | tee /etc/apt/sources.list.d/ngrok.list'
-        docker exec debian_sid apt update
-        docker exec debian_sid apt install -y ngrok
-        docker exec debian_sid ngrok config add-authtoken 30CFfgNYCMxlQYOf4joeNSaxe2O_3ki51dfeZofXGWBwbZSxQ
-    - name: Start ngrok with Auto-Restart Logic
-      run: |
+        cat << 'EOF' > start.sh
+        #!/bin/bash
+        while true; do
+            pkill ngrok
+            sleep 2
+            ngrok tcp 22 --log=stdout > ngrok.log &
+            sleep 10
+            URL=$(curl -s http://localhost:4040/api/tunnels | jq -r ".tunnels[0].public_url")
+            HOST=$(echo $URL | cut -d'/' -f3 | cut -d':' -f1)
+            PORT=$(echo $URL | cut -d':' -f3)
+            
+            echo ""
+            echo "===================================================="
+            echo "   COPY AND PASTE THE COMMAND BELOW TO ACCESS:"
+            echo "===================================================="
+            echo "ssh Davi@$HOST -p $PORT"
+            echo "===================================================="
+            echo ""
+            
+            # Monitor SSH connections
+            while [ $(ss -t -a | grep -c "ESTAB.*ssh") -eq 0 ]; do sleep 5; done
+            while [ $(ss -t -a | grep -c "ESTAB.*ssh") -gt 0 ]; do sleep 5; done
+            
+            echo "Connection closed. Restarting tunnel..."
+        done
+        EOF
+        chmod +x start.sh
+        ./start.sh
         docker exec -d debian_sid sh -c '
         while true; do
             pkill ngrok
