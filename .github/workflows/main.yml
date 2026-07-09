@@ -1,4 +1,4 @@
-name: Debian 12 WARP New Token
+name: Debian 12 WARP Latest Token
 
 on: [push, workflow_dispatch]
 
@@ -8,7 +8,7 @@ jobs:
     timeout-minutes: 1440
 
     steps:
-    - name: Enable IP Forwarding
+    - name: Enable IP Forwarding on Host
       run: |
         sudo sysctl -w net.ipv4.ip_forward=1
     - name: Run Debian 12 Environment
@@ -27,25 +27,27 @@ jobs:
         docker exec debian_warp useradd -m -s /bin/bash Davi
         docker exec debian_warp passwd -d Davi
         docker exec debian_warp usermod -aG sudo Davi
-    - name: Install Cloudflare WARP
+    - name: Enable IP Forwarding inside Container
       run: |
-        docker exec debian_warp sh -c 'curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg'
-        docker exec debian_warp sh -c 'echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ bookworm main" | tee /etc/apt/sources.list.d/cloudflare-client.list'
-        docker exec debian_warp apt update
-        docker exec debian_warp apt install -y cloudflare-warp
+        docker exec debian_warp sysctl -w net.ipv4.ip_forward=1
+    - name: Install Cloudflare WARP (User Commands)
+      run: |
+        docker exec debian_warp sh -c 'curl https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg'
+        docker exec debian_warp sh -c 'echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/cloudflare-client.list'
+        docker exec debian_warp apt-get update
+        docker exec debian_warp apt-get install -y cloudflare-warp
     - name: Start WARP Daemon and Connect
       run: |
-        # Start the daemon in the background
         docker exec -d debian_warp sh -c 'warp-svc'
         echo "Waiting for warp-svc to start..."
-        sleep 10
-        # Register and connect with NEW token
-        docker exec debian_warp warp-cli --accept-tos connector new eyJhIjoiYjRkYjYxMDY0NmU2Mjk0MTY5OTdhNDQ3NmY5ODljOWEiLCJ0IjoiNTgzZmE0MzEtNDAzNy00ZjA3LTk5OTUtZjljNDhmNjU0ZTM1IiwicyI6IlRyTlpFOUFDN3NwRzF4UlAxcTgrY1laQzN3SklFUGEwR25ZR0h3WUtDek40b1pEc3ovdzJkNkwyMS81aHVjc3pGWUFIQkZpbzBFN2s3cWZWcHl0MGFRPT0ifQ==
+        sleep 15
+        # Register and connect with the LATEST token
+        docker exec debian_warp warp-cli --accept-tos connector new eyJhIjoiYjRkYjYxMDY0NmU2Mjk0MTY5OTdhNDQ3NmY5ODljOWEiLCJ0IjoiODhjMTA2ZGEtM2ZiNC00ZmM4LWExZGEtODEwNTE5ZWI5ODhjIiwicyI6IjFFUUV5SjZIa3JXOGo2eldTYkNXdllETThKMm9jSXduc3JYNGZOWExMYzB4elZoM3YyN0dML0xpZ204eEJ3VUlzZjRyamlwWGdyUDZwOUdsL1MxbnBRPT0ifQ==
         docker exec debian_warp warp-cli --accept-tos connect
     - name: Display Status and Keep Alive
       run: |
         echo "===================================================="
-        echo "   DEBIAN 12 - CLOUDFLARE WARP CONNECTOR (NEW TOKEN)"
+        echo "   DEBIAN 12 - WARP CONNECTOR (LATEST TOKEN)"
         echo "===================================================="
         echo "User: Davi (NO PASSWORD)"
         echo "WARP Status:"
