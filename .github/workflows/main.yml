@@ -1,43 +1,42 @@
-name: Debian SSH Fixed
+name: Ubuntu RDP 24h
 
 on: [push, workflow_dispatch]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 0
+    timeout-minutes: 1440 # 24 hours
 
     steps:
-    - name: Run Debian Environment
+    - name: Update and Install Desktop Environment
       run: |
-        docker run -d --name debian_ssh -p 2222:22 debian:latest sleep infinity
-    - name: Setup Debian SSH
-      run: |
-        docker exec debian_ssh apt update
-        docker exec debian_ssh apt install -y openssh-server sudo curl gnupg jq
-        docker exec debian_ssh mkdir -p /var/run/sshd
-        docker exec debian_ssh service ssh start
+        sudo apt update
+        sudo apt install -y xfce4 xfce4-goodies xrdp jq
+        sudo adduser xrdp ssl-cert
+        echo "xfce4-session" > ~/.xsession
+        sudo systemctl enable xrdp
+        sudo systemctl start xrdp
     - name: Create User 'Davi'
       run: |
-        docker exec debian_ssh useradd -m -s /bin/bash Davi
-        docker exec debian_ssh sh -c 'echo "Davi:Vida@09871" | chpasswd'
-        docker exec debian_ssh usermod -aG sudo Davi
+        sudo useradd -m Davi
+        echo "Davi:Vida@09871" | sudo chpasswd
+        sudo usermod -aG sudo Davi
+        sudo usermod -aG ssl-cert Davi
     - name: Install and Authenticate ngrok
       run: |
-        docker exec debian_ssh sh -c 'curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null'
-        docker exec debian_ssh sh -c 'echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | tee /etc/apt/sources.list.d/ngrok.list'
-        docker exec debian_ssh apt update
-        docker exec debian_ssh apt install -y ngrok
-        docker exec debian_ssh ngrok config add-authtoken 30CFfgNYCMxlQYOf4joeNSaxe2O_3ki51dfeZofXGWBwbZSxQ
+        curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+        echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+        sudo apt update && sudo apt install ngrok
+        ngrok config add-authtoken 30CFfgNYCMxlQYOf4joeNSaxe2O_3ki51dfeZofXGWBwbZSxQ
     - name: Start ngrok and Extract URL
       run: |
-        docker exec -d debian_ssh sh -c 'ngrok tcp 22 --log=stdout > /ngrok.log &'
+        nohup ngrok tcp 3389 --log=stdout > ngrok.log &
         echo "Waiting for ngrok to start..."
         for i in {1..10}; do
-          URL=$(docker exec debian_ssh sh -c 'curl -s http://localhost:4040/api/tunnels | jq -r ".tunnels[0].public_url"')
+          URL=$(curl -s http://localhost:4040/api/tunnels | jq -r ".tunnels[0].public_url")
           if [ "$URL" != "null" ] && [ -n "$URL" ]; then
             echo "------------------------------------------------------------"
-            echo "SSH CONNECTION DETAILS:"
+            echo "RDP CONNECTION DETAILS:"
             echo "Address: $URL"
             echo "User: Davi"
             echo "Password: Vida@09871"
@@ -46,11 +45,9 @@ jobs:
           fi
           sleep 2
         done
-    - name: 5-Minute Keep-Alive Loop
+    - name: 24-Minute Keep-Alive Loop
       run: |
-        docker exec -d debian_ssh sh -c '
         while true; do
-            sleep 300
-            echo "SSH Session Active: $(date)" >> /reload.log
-        done'
-        docker logs -f debian_ssh
+            sleep 1440 # 24 minutes
+            echo "RDP Session Active (24min check): $(date)"
+        done
