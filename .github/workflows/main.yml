@@ -1,4 +1,4 @@
-name: Debian 12 WARP Fixed
+name: Debian 12 WARP New Token
 
 on: [push, workflow_dispatch]
 
@@ -39,13 +39,13 @@ jobs:
         docker exec -d debian_warp sh -c 'warp-svc'
         echo "Waiting for warp-svc to start..."
         sleep 10
-        # Register and connect
-        docker exec debian_warp warp-cli --accept-tos connector new eyJhIjoiYjRkYjYxMDY0NmU2Mjk0MTY5OTdhNDQ3NmY5ODljOWEiLCJ0IjoiMDNhOGUxZGMtNGI0OS00YWFkLWI0YzQtNjg2ODE0MTI2ZWJmIiwicyI6ImkvWHJFSldvTXB2RmUwSkRJbmNoM1daS2ZubWJSbjJNNGpZVGNuaEwvV3I1TWF5ZitPTmhtVEk4NnBrOHczVVNJdHoxekZYYysrRGV3ZlBDcW83SGNRPT0ifQ==
+        # Register and connect with NEW token
+        docker exec debian_warp warp-cli --accept-tos connector new eyJhIjoiYjRkYjYxMDY0NmU2Mjk0MTY5OTdhNDQ3NmY5ODljOWEiLCJ0IjoiNTgzZmE0MzEtNDAzNy00ZjA3LTk5OTUtZjljNDhmNjU0ZTM1IiwicyI6IlRyTlpFOUFDN3NwRzF4UlAxcTgrY1laQzN3SklFUGEwR25ZR0h3WUtDek40b1pEc3ovdzJkNkwyMS81aHVjc3pGWUFIQkZpbzBFN2s3cWZWcHl0MGFRPT0ifQ==
         docker exec debian_warp warp-cli --accept-tos connect
     - name: Display Status and Keep Alive
       run: |
         echo "===================================================="
-        echo "   DEBIAN 12 - CLOUDFLARE WARP CONNECTOR ACTIVE"
+        echo "   DEBIAN 12 - CLOUDFLARE WARP CONNECTOR (NEW TOKEN)"
         echo "===================================================="
         echo "User: Davi (NO PASSWORD)"
         echo "WARP Status:"
