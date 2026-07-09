@@ -1,4 +1,4 @@
-name: Debian 12 Pinggy Token
+name: Debian 12 Pinggy Final SSH
 
 on: [push, workflow_dispatch]
 
@@ -28,12 +28,24 @@ jobs:
         docker exec debian_ptero usermod -aG sudo Davi
     - name: Start Pinggy Tunnel
       run: |
-        # Using the Pinggy token yU5bqrJJwh1
         docker run -d --name pinggy_tunnel --net=host pinggy/pinggy -p 443 -R0:localhost:22 yU5bqrJJwh1+force+udp@us.free.pinggy.io
-    - name: Display Connection Info
+    - name: Display Connection Command
       run: |
-        echo "Aguardando Pinggy gerar o link..."
-        sleep 15
+        echo ""
+        echo "===================================================="
+        echo "   DEBIAN 12 - PINGGY SSH CONNECTION READY"
+        echo "===================================================="
+        echo "COPIE E COLE O COMANDO ABAIXO NO SEU TERMINAL:"
+        echo ""
+        echo "ssh Davi@evqqh-13-87-231-100.run.pinggy-free.link -p 29272"
+        echo ""
+        echo "===================================================="
+        echo "User: Davi (NO PASSWORD)"
+        echo "===================================================="
+        sleep 5
+        docker logs pinggy_tunnel
+    - name: Keep Alive
+      run: docker logs -f debian_ptero
         echo "===================================================="
         echo "   DEBIAN 12 - PINGGY SSH ACCESS (TOKEN: yU5bqrJJwh1)"
         echo "===================================================="
